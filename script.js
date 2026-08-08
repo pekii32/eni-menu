@@ -8,6 +8,7 @@ const app    = document.getElementById('app');
 const nav    = document.getElementById('nav');
 const rowsEl = document.getElementById('rows');
 const title  = document.getElementById('title');
+const hintEl = document.getElementById('hint');
 const notif  = document.getElementById('notif');
 const cursor = document.getElementById('cursor');
 
@@ -58,6 +59,7 @@ function rowHtml(r, hovered) {
 function render(d) {
     renderTabs(d.tabs || [], d.tabIndex || 0, d.hoverTab || 0);
     title.textContent = d.title || '';
+    hintEl.textContent = d.hint || '';
     rowsEl.innerHTML = (d.rows || [])
         .map((r, i) => rowHtml(r, i + 1 === d.hoverRow))
         .join('');
