@@ -506,20 +506,19 @@ CreateThread(function()
     while ENI.alive do
         Wait(0)
 
-        if IsControlJustPressed(0, 166) then setOpen(not open) end   -- F5
+        -- controls are disabled while open, so F5 has to be read both ways
+        if IsControlJustPressed(0, 166) or IsDisabledControlJustPressed(0, 166) then
+            setOpen(not open)
+        end
 
         if open then
             rows = buildRows()
 
-            if S.blockInput then
-                DisableAllControlActions(0)
-                EnableControlAction(0, 1, true)   -- LOOK_LR stays dead but camera pitch/yaw disabled anyway
-                DisableControlAction(0, 1, true)
-                DisableControlAction(0, 2, true)
-            end
+            -- blocks movement, shooting, camera — everything. We read our own
+            -- input through the IsDisabledControl* family below.
+            if S.blockInput then DisableAllControlActions(0) end
 
             SetMouseCursorActiveThisFrame()
-            ShowCursorThisFrame()
 
             mx = GetDisabledControlNormal(0, 239) * sw
             my = GetDisabledControlNormal(0, 240) * sh
