@@ -1,9 +1,13 @@
--- eni.menu — single lua executor script
--- load this through your fivem executor (redengine/eulen/hydrogen/etc)
--- press F5 to toggle
+-- eni.menu — DUI-based, works in Red Engine / Eulen / any FiveM executor
+-- execute this script, press F5 in-game
 
-local MENU_URL = 'https://pekii32.github.io/eni-menu/'
-local RESOURCE = GetCurrentResourceName()
+local RESOURCE = (GetCurrentResourceName and GetCurrentResourceName()) or 'default'
+local MENU_URL = 'https://pekii32.github.io/eni-menu/?resource='..RESOURCE
+
+-- kill any prior instance
+if _G.__eniMenuInstance then
+    pcall(function() _G.__eniMenuInstance.destroy() end)
+end
 
 local menuOpen = false
 local state = {
@@ -21,16 +25,21 @@ local WEAPONS = {
     'WEAPON_MACHETE','WEAPON_RAILGUN'
 }
 
-SetNuiUrl(RESOURCE, MENU_URL .. '?resource=' .. RESOURCE)
+-- DUI setup ---------------------------------------------------------------
+local sw, sh = GetActiveScreenResolution()
+local dui = CreateDui(MENU_URL, sw, sh)
+local txdName = 'eni_menu_txd_'..(GetGameTimer() % 100000)
+local txd = CreateRuntimeTxd(txdName)
+local tx  = CreateRuntimeTextureFromDuiHandle(txd, 'menu', GetDuiHandle(dui))
 
 local function ped() return PlayerPedId() end
 local function coords() return GetEntityCoords(ped()) end
-local function notify(text) SendNUIMessage({ action = 'notify', text = text }) end
+local function notify(t) SendDuiMessage(dui, json.encode({ action='notify', text=t })) end
 
 local function toggleMenu(force)
     if force ~= nil then menuOpen = force else menuOpen = not menuOpen end
     SetNuiFocus(menuOpen, menuOpen)
-    SendNUIMessage({ action = 'setVisible', visible = menuOpen, state = state })
+    SendDuiMessage(dui, json.encode({ action='setVisible', visible=menuOpen, state=state }))
 end
 
 local function targetPed(sid)
@@ -50,8 +59,32 @@ local function loadModel(name)
     return h
 end
 
+-- Render + input loop -----------------------------------------------------
+local renderThread = CreateThread(function()
+    while _G.__eniMenuInstance == nil or _G.__eniMenuInstance.id == txdName do
+        Wait(0)
+
+        if IsControlJustPressed(0, 166) then toggleMenu() end -- F5
+
+        if menuOpen then
+            DrawSprite(txdName, 'menu', 0.5, 0.5, 1.0, 1.0, 0.0, 255, 255, 255, 255)
+
+            local cx, cy = GetNuiCursorPosition()
+            if cx and cy then
+                SendDuiMouseMove(dui, cx, cy)
+                if IsDisabledControlJustPressed(0, 237) then SendDuiMouseDown(dui, 'left')  end
+                if IsDisabledControlJustReleased(0, 237) then SendDuiMouseUp(dui, 'left')   end
+                if IsDisabledControlJustPressed(0, 238) then SendDuiMouseDown(dui, 'right') end
+                if IsDisabledControlJustReleased(0, 238) then SendDuiMouseUp(dui, 'right')  end
+            end
+            if IsDisabledControlJustPressed(0, 322) then toggleMenu(false) end -- ESC
+        end
+    end
+end)
+
+-- State loops -------------------------------------------------------------
 CreateThread(function()
-    while true do
+    while _G.__eniMenuInstance == nil or _G.__eniMenuInstance.id == txdName do
         Wait(0)
         local p = ped()
         if state.god then SetEntityInvincible(p, true) SetPedCanRagdoll(p, false) end
@@ -77,7 +110,7 @@ CreateThread(function()
 end)
 
 CreateThread(function()
-    while true do
+    while _G.__eniMenuInstance == nil or _G.__eniMenuInstance.id == txdName do
         Wait(0)
         if state.noclip then
             local p = ped()
@@ -99,14 +132,7 @@ CreateThread(function()
     end
 end)
 
-CreateThread(function()
-    while true do
-        Wait(0)
-        if IsControlJustPressed(0, 166) then toggleMenu() end
-        if menuOpen and IsDisabledControlJustPressed(0, 322) then toggleMenu(false) end
-    end
-end)
-
+-- NUI callbacks (FiveM routes https://<RESOURCE>/<name> from DUI to here) -
 RegisterNUICallback('close', function(_, cb) toggleMenu(false) cb('ok') end)
 
 RegisterNUICallback('toggle', function(d, cb)
@@ -118,7 +144,7 @@ RegisterNUICallback('toggle', function(d, cb)
     if d.key == 'god' and not d.value then SetEntityInvincible(ped(), false); SetPedCanRagdoll(ped(), true) end
     if d.key == 'invisible' and not d.value then SetEntityVisible(ped(), true, false) end
     if d.key == 'infAmmo' and not d.value then SetPedInfiniteAmmo(ped(), false, GetSelectedPedWeapon(ped())) end
-    notify(d.key .. ' -> ' .. tostring(d.value))
+    notify(d.key..' -> '..tostring(d.value))
     cb('ok')
 end)
 
@@ -137,7 +163,7 @@ end)
 
 RegisterNUICallback('tpWaypoint', function(_, cb)
     local wp = GetFirstBlipInfoId(8)
-    if not DoesBlipExist(wp) then notify('no waypoint set'); cb('nope'); return end
+    if not DoesBlipExist(wp) then notify('no waypoint'); cb('nope'); return end
     local c = GetBlipInfoIdCoord(wp)
     local z
     for h = 1, 1000 do
@@ -188,9 +214,7 @@ end)
 RegisterNUICallback('killPeds', function(_, cb)
     local myC = coords()
     for _, p in ipairs(GetGamePool('CPed')) do
-        if not IsPedAPlayer(p) and #(GetEntityCoords(p) - myC) < 100.0 then
-            SetEntityHealth(p, 0)
-        end
+        if not IsPedAPlayer(p) and #(GetEntityCoords(p) - myC) < 100.0 then SetEntityHealth(p, 0) end
     end
     cb('ok')
 end)
@@ -209,8 +233,7 @@ RegisterNUICallback('getPlayers', function(_, cb)
     for _, id in ipairs(GetActivePlayers()) do
         local pp = GetPlayerPed(id)
         list[#list+1] = {
-            id = id,
-            serverId = GetPlayerServerId(id),
+            id = id, serverId = GetPlayerServerId(id),
             name = GetPlayerName(id),
             distance = math.floor(#(GetEntityCoords(pp) - myC)),
             health = GetEntityHealth(pp),
@@ -255,12 +278,8 @@ RegisterNUICallback('unspectate', function(_, cb)
     NetworkSetInSpectatorMode(false, ped()); cb('ok')
 end)
 
-RegisterNUICallback('moonGravity', function(_, cb)
-    SetGravityLevel(2); notify('low gravity'); cb('ok')
-end)
-RegisterNUICallback('normalGravity', function(_, cb)
-    SetGravityLevel(0); cb('ok')
-end)
+RegisterNUICallback('moonGravity', function(_, cb) SetGravityLevel(2); cb('ok') end)
+RegisterNUICallback('normalGravity', function(_, cb) SetGravityLevel(0); cb('ok') end)
 RegisterNUICallback('spawnCircle', function(_, cb)
     local c = coords(); local m = loadModel('adder')
     if not m then cb('nope') return end
@@ -269,7 +288,16 @@ RegisterNUICallback('spawnCircle', function(_, cb)
         local v = CreateVehicle(m, c.x + math.cos(a) * 8, c.y + math.sin(a) * 8, c.z, math.deg(a), true, false)
         SetVehicleEngineOn(v, true, true, false)
     end
-    SetModelAsNoLongerNeeded(m); notify('circle of adders'); cb('ok')
+    SetModelAsNoLongerNeeded(m); cb('ok')
 end)
 
-notify('eni.menu loaded — press F5')
+_G.__eniMenuInstance = {
+    id = txdName,
+    destroy = function()
+        pcall(function() DestroyDui(dui) end)
+        pcall(function() SetNuiFocus(false, false) end)
+        _G.__eniMenuInstance = nil
+    end,
+}
+
+Citizen.Trace('eni.menu (DUI) loaded — press F5\n')
