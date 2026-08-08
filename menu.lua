@@ -586,7 +586,11 @@ local function paginate(all)
     for _, row in ipairs(all) do
         local rh = (row.t == 'section') and SEC_H or ROW_H
         if h + rh > CONTENT_H and #cur > 0 then
-            pages[#pages+1] = cur; cur = {}; h = 0
+            -- never strand a section header alone at the foot of a page
+            local carry = (cur[#cur].t == 'section') and table.remove(cur) or nil
+            pages[#pages+1] = cur
+            cur, h = {}, 0
+            if carry then cur[1] = carry; h = SEC_H end
         end
         cur[#cur+1] = row; h = h + rh
     end
