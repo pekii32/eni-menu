@@ -1,210 +1,91 @@
-const params = new URLSearchParams(location.search);
-const RESOURCE = params.get('resource');
-const MODE = RESOURCE ? 'nui' : 'http';
-let API = params.get('api') || localStorage.getItem('eniApi') || 'http://localhost:8765';
+// eni.menu renderer.
+// DUI has no page->lua channel, so this file never sends anything back.
+// Lua owns all state and input; we just draw whatever it pushes over
+// SendDuiMessage. Row heights here MUST match the constants in menu.lua
+// (section 34px, row 46px) or lua's mouse hit-testing drifts out of sync.
 
-const endpoint = (name) => MODE === 'nui'
-    ? `https://${RESOURCE}/${name}`
-    : `${API}/${name}`;
+const app    = document.getElementById('app');
+const nav    = document.getElementById('nav');
+const rowsEl = document.getElementById('rows');
+const title  = document.getElementById('title');
+const notif  = document.getElementById('notif');
+const cursor = document.getElementById('cursor');
 
-const notif = document.getElementById('notif');
-const connDot = document.getElementById('connDot');
-const connText = document.getElementById('connText');
-const targetHint = document.getElementById('targetHint');
+let lastTabs = null;
+let notifyTimer = null;
 
-const post = (name, data = {}) =>
-    fetch(endpoint(name), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-    }).then(r => r.json()).catch(e => ({ ok: false, error: e.message }));
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
+    c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const get = (name) =>
-    fetch(endpoint(name)).then(r => r.json()).catch(() => null);
-
-function notify(text, ok = true) {
-    notif.textContent = text;
-    notif.classList.toggle('err', !ok);
-    notif.classList.add('show');
-    clearTimeout(notify._t);
-    notify._t = setTimeout(() => notif.classList.remove('show'), 2200);
-}
-
-document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const t = btn.dataset.tab;
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
-        document.querySelectorAll('.tab').forEach(s => s.classList.toggle('active', s.dataset.tab === t));
-        document.getElementById('tabTitle').textContent = btn.textContent;
-        if (t === 'players') refreshPlayers();
-        if (t === 'exec' || t === 'settings') loadResources();
-    });
-});
-
-document.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-action]');
-    if (!btn) return;
-    const action = btn.dataset.action;
-    const payload = btn.dataset.payload ? JSON.parse(btn.dataset.payload) : {};
-    post(action, payload).then(r => {
-        if (r && r.ok === false) notify(r.error || 'failed', false);
-    });
-});
-
-document.querySelectorAll('[data-toggle]').forEach(cb => {
-    cb.addEventListener('change', () => {
-        post('toggle', { key: cb.dataset.toggle, value: cb.checked }).then(r => {
-            if (r && r.ok === false) { cb.checked = !cb.checked; notify(r.error || 'toggle failed', false); }
-        });
-    });
-});
-
-document.getElementById('tpCoordsBtn').onclick = () => {
-    post('tpCoords', {
-        x: parseFloat(document.getElementById('tpx').value) || 0,
-        y: parseFloat(document.getElementById('tpy').value) || 0,
-        z: parseFloat(document.getElementById('tpz').value) || 100,
-    });
-};
-
-document.getElementById('spawnVehBtn').onclick = () => {
-    post('spawnVehicle', { model: document.getElementById('vehModel').value || 'adder' });
-};
-
-const timeSlider = document.getElementById('timeSlider');
-const timeVal = document.getElementById('timeVal');
-timeSlider.addEventListener('input', () => { timeVal.textContent = timeSlider.value; });
-timeSlider.addEventListener('change', () => post('setTime', { hour: timeSlider.value }));
-
-async function refreshPlayers() {
-    const list = document.getElementById('playerList');
-    list.innerHTML = '<li>loading...</li>';
-    const players = await post('getPlayers');
-    if (!Array.isArray(players)) { list.innerHTML = '<li class="pmeta">no data</li>'; return; }
-    if (players.length === 0) { list.innerHTML = '<li class="pmeta">no players nearby</li>'; return; }
-    list.innerHTML = '';
-    players.forEach(p => {
-        const li = document.createElement('li');
-        li.innerHTML = `
-            <div>
-                <div class="pname">${escapeHtml(p.name)} <span class="pmeta">#${p.serverId}</span></div>
-                <div class="pmeta">${p.distance}m · ${p.health}hp</div>
-            </div>
-            <div class="pactions">
-                <button data-a="tpToPlayer">TP</button>
-                <button data-a="explodePlayer">Boom</button>
-                <button data-a="firePlayer">Fire</button>
-                <button data-a="rainCars">Rain</button>
-                <button data-a="spectate">Spec</button>
-            </div>`;
-        li.querySelectorAll('.pactions button').forEach(b => {
-            b.onclick = () => post(b.dataset.a, { id: p.serverId });
-        });
-        list.appendChild(li);
-    });
-}
-document.getElementById('refreshPlayers').onclick = refreshPlayers;
-
-function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
-async function loadResources() {
-    const rs = await get('resources');
-    if (!Array.isArray(rs)) return;
-    for (const id of ['execResource', 'targetResource']) {
-        const sel = document.getElementById(id);
-        const cur = sel.value;
-        sel.innerHTML = rs.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
-        if (cur && rs.includes(cur)) sel.value = cur;
+function renderTabs(tabs, activeIndex, hoverTab) {
+    const key = tabs.join('|');
+    if (key !== lastTabs) {
+        nav.innerHTML = tabs.map(t => `<div class="tab-btn">${esc(t)}</div>`).join('');
+        lastTabs = key;
     }
+    [...nav.children].forEach((el, i) => {
+        el.classList.toggle('active', i + 1 === activeIndex);
+        el.classList.toggle('hover', i + 1 === hoverTab);
+    });
 }
-document.getElementById('loadResources').onclick = loadResources;
 
-document.getElementById('execRun').onclick = async () => {
-    const code = document.getElementById('execCode').value;
-    const resource = document.getElementById('execResource').value;
-    const r = await post('exec', { code, resource });
-    notify(r.ok ? 'executed' : (r.error || 'failed'), r.ok);
-};
-document.getElementById('execClear').onclick = () => {
-    document.getElementById('execCode').value = '';
-};
+function rowHtml(r, hovered) {
+    if (r.t === 'section') return `<div class="sec">${esc(r.label)}</div>`;
+    if (r.t === 'empty')   return `<div class="row empty">${esc(r.label)}</div>`;
 
-document.getElementById('apiUrl').value = API;
-document.getElementById('saveApi').onclick = () => {
-    const v = document.getElementById('apiUrl').value.trim().replace(/\/$/, '');
-    if (!v) return;
-    API = v;
-    localStorage.setItem('eniApi', v);
-    notify('API URL saved');
-    checkConn();
-};
+    const cls = ['row'];
+    if (hovered) cls.push('hover');
+    if (r.danger) cls.push('danger');
 
-document.getElementById('saveTarget').onclick = async () => {
-    const r = await post('target', { resource: document.getElementById('targetResource').value });
-    notify(r.ok ? 'target set' : (r.error || 'failed'), r.ok);
-    checkConn();
-};
-
-document.getElementById('rebootstrap').onclick = async () => {
-    const r = await post('target', { resource: document.getElementById('targetResource').value || 'spawnmanager' });
-    notify(r.ok ? 're-bootstrapped' : (r.error || 'failed'), r.ok);
-};
-
-async function checkConn() {
-    if (MODE === 'nui') {
-        // In NUI mode the visibility comes from lua via postMessage.
-        connDot.classList.add('online');
-        connText.textContent = `nui: ${RESOURCE}`;
-        targetHint.textContent = `mode: red engine`;
-        return;
-    }
-    const r = await get('status');
-    if (r && r.ok) {
-        connDot.classList.add('online');
-        connText.textContent = `${API.replace(/^https?:\/\//, '')}`;
-        targetHint.textContent = `target: ${r.target || '—'}`;
+    let right = '';
+    if (r.t === 'toggle') {
+        right = `<span class="sw ${r.on ? 'on' : ''}"></span>`;
+    } else if (r.t === 'value') {
+        right = `<span class="val">${esc(r.value)}</span><i class="chev"></i>`;
+    } else if (r.t === 'player') {
+        right = `<i class="chev"></i>`;
     } else {
-        connDot.classList.remove('online');
-        connText.textContent = 'disconnected';
-        targetHint.textContent = 'target: —';
+        right = `<i class="chev"></i>`;
+    }
+
+    const label = r.sub
+        ? `<span class="lbl"><b>${esc(r.label)}</b><em>${esc(r.sub)}</em></span>`
+        : `<span class="lbl">${esc(r.label)}</span>`;
+
+    return `<div class="${cls.join(' ')}">${label}${right}</div>`;
+}
+
+function render(d) {
+    renderTabs(d.tabs || [], d.tabIndex || 0, d.hoverTab || 0);
+    title.textContent = d.title || '';
+    rowsEl.innerHTML = (d.rows || [])
+        .map((r, i) => rowHtml(r, i + 1 === d.hoverRow))
+        .join('');
+
+    if (d.cursor) {
+        cursor.style.transform = `translate(${d.cursor.x}px, ${d.cursor.y}px)`;
+        cursor.classList.add('on');
+    }
+
+    if (d.notify) {
+        if (notif.textContent !== d.notify) {
+            notif.textContent = d.notify;
+            notif.classList.add('show');
+        }
+        clearTimeout(notifyTimer);
+        notifyTimer = setTimeout(() => notif.classList.remove('show'), 2200);
     }
 }
 
-// NUI visibility bridge (Red Engine executor path)
-if (MODE === 'nui') {
-    document.body.classList.add('nui');
-    document.getElementById('app').classList.add('hidden');
+window.addEventListener('message', (e) => {
+    let d = e.data;
+    if (typeof d === 'string') { try { d = JSON.parse(d); } catch { return; } }
+    if (!d || !d.action) return;
 
-    // Executor + Settings drive the HTTP API only — no lua handlers back them.
-    document.querySelectorAll('.tab-btn[data-tab="exec"], .tab-btn[data-tab="settings"]')
-        .forEach(b => b.classList.add('hidden'));
-
-    window.addEventListener('message', (e) => {
-        const d = e.data || {};
-        if (d.action === 'setVisible') {
-            document.getElementById('app').classList.toggle('hidden', !d.visible);
-            if (d.visible && d.state) {
-                document.querySelectorAll('[data-toggle]').forEach(cb => {
-                    if (d.state[cb.dataset.toggle] !== undefined) cb.checked = d.state[cb.dataset.toggle];
-                });
-            }
-        }
-        if (d.action === 'notify' && d.text) notify(d.text);
-    });
-    document.addEventListener('keyup', (e) => {
-        if (e.key === 'Escape') post('close');
-    });
-
-    // Paint our own pointer from the mouse position lua forwards into the DUI.
-    const cursor = document.getElementById('cursor');
-    document.addEventListener('mousemove', (e) => {
-        cursor.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
-        cursor.classList.add('on');
-    });
-}
-
-setInterval(checkConn, 4000);
-checkConn();
-if (MODE === 'http') loadResources();
+    if (d.action === 'visible') {
+        app.classList.toggle('hidden', !d.visible);
+    } else if (d.action === 'render') {
+        app.classList.remove('hidden');
+        render(d);
+    }
+});
