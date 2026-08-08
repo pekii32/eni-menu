@@ -1,5 +1,11 @@
 const params = new URLSearchParams(location.search);
+const RESOURCE = params.get('resource');
+const MODE = RESOURCE ? 'nui' : 'http';
 let API = params.get('api') || localStorage.getItem('eniApi') || 'http://localhost:8765';
+
+const endpoint = (name) => MODE === 'nui'
+    ? `https://${RESOURCE}/${name}`
+    : `${API}/${name}`;
 
 const notif = document.getElementById('notif');
 const connDot = document.getElementById('connDot');
@@ -7,14 +13,14 @@ const connText = document.getElementById('connText');
 const targetHint = document.getElementById('targetHint');
 
 const post = (name, data = {}) =>
-    fetch(`${API}/${name}`, {
+    fetch(endpoint(name), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
     }).then(r => r.json()).catch(e => ({ ok: false, error: e.message }));
 
 const get = (name) =>
-    fetch(`${API}/${name}`).then(r => r.json()).catch(() => null);
+    fetch(endpoint(name)).then(r => r.json()).catch(() => null);
 
 function notify(text, ok = true) {
     notif.textContent = text;
@@ -147,6 +153,13 @@ document.getElementById('rebootstrap').onclick = async () => {
 };
 
 async function checkConn() {
+    if (MODE === 'nui') {
+        // In NUI mode the visibility comes from lua via postMessage.
+        connDot.classList.add('online');
+        connText.textContent = `nui: ${RESOURCE}`;
+        targetHint.textContent = `mode: red engine`;
+        return;
+    }
     const r = await get('status');
     if (r && r.ok) {
         connDot.classList.add('online');
@@ -158,6 +171,22 @@ async function checkConn() {
         targetHint.textContent = 'target: —';
     }
 }
+
+// NUI visibility bridge (Red Engine executor path)
+if (MODE === 'nui') {
+    document.getElementById('app').classList.add('hidden');
+    window.addEventListener('message', (e) => {
+        const d = e.data || {};
+        if (d.action === 'setVisible') {
+            document.getElementById('app').classList.toggle('hidden', !d.visible);
+        }
+        if (d.action === 'notify' && d.text) notify(d.text);
+    });
+    document.addEventListener('keyup', (e) => {
+        if (e.key === 'Escape') post('close');
+    });
+}
+
 setInterval(checkConn, 4000);
 checkConn();
-loadResources();
+if (MODE === 'http') loadResources();
