@@ -2,10 +2,11 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<title>eni.menu</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="app" class="hidden">
+<div id="app">
     <div class="panel">
         <aside class="sidebar">
             <div class="brand">
@@ -19,14 +20,19 @@
                 <button class="tab-btn" data-tab="world">World</button>
                 <button class="tab-btn" data-tab="players">Players</button>
                 <button class="tab-btn" data-tab="fun">Fun</button>
+                <button class="tab-btn" data-tab="exec">Executor</button>
+                <button class="tab-btn" data-tab="settings">Settings</button>
             </nav>
-            <button id="closeBtn" class="close">Close [ESC]</button>
+            <div class="conn">
+                <span class="conn-dot" id="connDot"></span>
+                <span id="connText">connecting...</span>
+            </div>
         </aside>
 
         <main>
             <header>
                 <h1 id="tabTitle">Self</h1>
-                <span class="hint">F5 to toggle</span>
+                <span class="hint" id="targetHint">target: —</span>
             </header>
 
             <section class="tab active" data-tab="self">
@@ -54,9 +60,9 @@
                     <button class="btn primary" data-action="tpWaypoint">To Waypoint</button>
                 </div>
                 <div class="row coords">
-                    <input id="tpx" placeholder="x" type="number">
-                    <input id="tpy" placeholder="y" type="number">
-                    <input id="tpz" placeholder="z" type="number">
+                    <input id="tpx" placeholder="x" type="number" step="any">
+                    <input id="tpy" placeholder="y" type="number" step="any">
+                    <input id="tpz" placeholder="z" type="number" step="any">
                     <button class="btn" id="tpCoordsBtn">Go</button>
                 </div>
             </section>
@@ -66,7 +72,7 @@
                     <label><input type="checkbox" data-toggle="vehGod"> Vehicle God</label>
                 </div>
                 <div class="row">
-                    <input id="vehModel" placeholder="model (e.g. adder)">
+                    <input id="vehModel" placeholder="model (e.g. adder, zentorno, t20)">
                     <button class="btn primary" id="spawnVehBtn">Spawn</button>
                 </div>
                 <div class="row">
@@ -99,6 +105,7 @@
                 <div class="row">
                     <button class="btn primary" id="refreshPlayers">Refresh</button>
                     <button class="btn" data-action="unspectate">Stop Spectate</button>
+                    <span class="pmeta" id="playerHint">list updates every ~2s via bootstrap</span>
                 </div>
                 <ul id="playerList" class="list"></ul>
             </section>
@@ -108,6 +115,39 @@
                     <button class="btn" data-action="moonGravity">Moon Gravity</button>
                     <button class="btn" data-action="normalGravity">Normal Gravity</button>
                     <button class="btn" data-action="spawnCircle">Circle of Cars</button>
+                </div>
+            </section>
+
+            <section class="tab" data-tab="exec">
+                <div class="row">
+                    <select id="execResource" class="input"></select>
+                    <button class="btn" id="loadResources">Refresh</button>
+                </div>
+                <textarea id="execCode" class="code" spellcheck="false" placeholder="-- lua goes here&#10;print('hi from eni.menu')"></textarea>
+                <div class="row">
+                    <button class="btn primary" id="execRun">Run</button>
+                    <button class="btn" id="execClear">Clear</button>
+                </div>
+            </section>
+
+            <section class="tab" data-tab="settings">
+                <div class="setting">
+                    <label>API URL</label>
+                    <input id="apiUrl" placeholder="http://localhost:8765" class="input" style="flex:1;max-width:260px">
+                    <button class="btn" id="saveApi">Save</button>
+                </div>
+                <div class="setting">
+                    <label>Target resource</label>
+                    <select id="targetResource" class="input" style="flex:1;max-width:260px"></select>
+                    <button class="btn" id="saveTarget">Set</button>
+                </div>
+                <div class="setting">
+                    <label>Bootstrap player-list writer</label>
+                    <button class="btn" id="rebootstrap">Re-bootstrap</button>
+                </div>
+                <div class="setting">
+                    <label>Build</label>
+                    <span class="value">eni.menu v2 · web-hosted UI</span>
                 </div>
             </section>
         </main>

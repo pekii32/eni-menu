@@ -29,6 +29,85 @@ html, body {
 #app.hidden { display: none; }
 @keyframes fadeIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
 
+.conn {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 8px 4px;
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+    font-size: 11px; color: var(--muted);
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    word-break: break-all;
+}
+.conn-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--err); flex-shrink: 0;
+    box-shadow: 0 0 8px var(--err);
+    transition: all 200ms ease;
+}
+.conn-dot.online {
+    background: var(--ok);
+    box-shadow: 0 0 8px var(--ok);
+}
+
+.setting {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 14px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.setting label { font-size: 13px; }
+.setting .value { color: var(--muted); font-size: 12px; }
+
+.input {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-family: inherit; font-size: 13px;
+    outline: none;
+}
+.input:focus { border-color: var(--accent); }
+
+select.input {
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+                      linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+    background-size: 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 26px;
+}
+
+.code {
+    background: #0d0d10;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px;
+    padding: 14px;
+    border-radius: 10px;
+    resize: none;
+    outline: none;
+    line-height: 1.55;
+    tab-size: 4;
+    min-height: 260px;
+    flex: 1;
+}
+.code:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--glow); }
+
+.notif.err {
+    border-color: var(--err);
+    box-shadow: 0 4px 20px rgba(248,113,113,0.35);
+}
+.notif.err::before {
+    content: '⚠ ';
+    color: var(--err);
+}
+
 .panel {
     display: grid;
     grid-template-columns: 210px 1fr;
