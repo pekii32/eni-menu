@@ -9,10 +9,7 @@
 <div id="app">
     <div class="panel">
         <aside class="sidebar">
-            <div class="brand">
-                <span class="dot"></span>
-                <div><b>eni</b><span class="accent">.menu</span></div>
-            </div>
+            <div class="brand">eni<span>.menu</span></div>
             <nav>
                 <button class="tab-btn active" data-tab="self">Self</button>
                 <button class="tab-btn" data-tab="teleport">Teleport</button>
@@ -25,134 +22,153 @@
             </nav>
             <div class="conn">
                 <span class="conn-dot" id="connDot"></span>
-                <span id="connText">connecting...</span>
+                <span id="connText">connecting</span>
             </div>
         </aside>
 
         <main>
             <header>
                 <h1 id="tabTitle">Self</h1>
-                <span class="hint" id="targetHint">target: —</span>
+                <span class="hint" id="targetHint"></span>
             </header>
 
+            <div class="scroll">
+
             <section class="tab active" data-tab="self">
-                <div class="row toggles">
-                    <label><input type="checkbox" data-toggle="god"> Godmode</label>
-                    <label><input type="checkbox" data-toggle="invisible"> Invisible</label>
-                    <label><input type="checkbox" data-toggle="noclip"> Noclip</label>
-                    <label><input type="checkbox" data-toggle="superJump"> Super Jump</label>
-                    <label><input type="checkbox" data-toggle="superRun"> Super Run</label>
-                    <label><input type="checkbox" data-toggle="infAmmo"> Inf Ammo</label>
+                <div class="group">
+                    <div class="item"><span>Godmode</span><input type="checkbox" data-toggle="god"></div>
+                    <div class="item"><span>Invisible</span><input type="checkbox" data-toggle="invisible"></div>
+                    <div class="item"><span>Noclip</span><input type="checkbox" data-toggle="noclip"></div>
+                    <div class="item"><span>Super Jump</span><input type="checkbox" data-toggle="superJump"></div>
+                    <div class="item"><span>Super Run</span><input type="checkbox" data-toggle="superRun"></div>
+                    <div class="item"><span>Infinite Ammo</span><input type="checkbox" data-toggle="infAmmo"></div>
                 </div>
-                <div class="row">
-                    <button class="btn" data-action="heal">Heal + Armor</button>
-                    <button class="btn" data-action="giveWeapons">Give Weapons</button>
-                    <button class="btn danger" data-action="suicide">Suicide</button>
+                <div class="group">
+                    <div class="item tappable" data-action="heal"><span>Heal &amp; Armor</span><i class="chev"></i></div>
+                    <div class="item tappable" data-action="giveWeapons"><span>Give All Weapons</span><i class="chev"></i></div>
+                    <div class="item tappable destructive" data-action="suicide"><span>Suicide</span><i class="chev"></i></div>
                 </div>
-                <div class="row">
-                    <button class="btn" data-action="wanted" data-payload='{"level":0}'>Wanted 0</button>
-                    <button class="btn" data-action="wanted" data-payload='{"level":5}'>Wanted 5</button>
+                <p class="label">Wanted level</p>
+                <div class="group">
+                    <div class="item">
+                        <span>Set stars</span>
+                        <div class="seg">
+                            <button data-action="wanted" data-payload='{"level":0}'>0</button>
+                            <button data-action="wanted" data-payload='{"level":1}'>1</button>
+                            <button data-action="wanted" data-payload='{"level":2}'>2</button>
+                            <button data-action="wanted" data-payload='{"level":3}'>3</button>
+                            <button data-action="wanted" data-payload='{"level":5}'>5</button>
+                        </div>
+                    </div>
                 </div>
             </section>
 
             <section class="tab" data-tab="teleport">
-                <div class="row">
-                    <button class="btn primary" data-action="tpWaypoint">To Waypoint</button>
+                <div class="group">
+                    <div class="item tappable" data-action="tpWaypoint"><span>Teleport to Waypoint</span><i class="chev"></i></div>
                 </div>
-                <div class="row coords">
-                    <input id="tpx" placeholder="x" type="number" step="any">
-                    <input id="tpy" placeholder="y" type="number" step="any">
-                    <input id="tpz" placeholder="z" type="number" step="any">
-                    <button class="btn" id="tpCoordsBtn">Go</button>
+                <p class="label">Coordinates</p>
+                <div class="group">
+                    <div class="item"><span>X</span><input id="tpx" type="number" step="any" placeholder="0.0"></div>
+                    <div class="item"><span>Y</span><input id="tpy" type="number" step="any" placeholder="0.0"></div>
+                    <div class="item"><span>Z</span><input id="tpz" type="number" step="any" placeholder="0.0"></div>
                 </div>
+                <button class="wide primary" id="tpCoordsBtn">Teleport</button>
             </section>
 
             <section class="tab" data-tab="vehicle">
-                <div class="row toggles">
-                    <label><input type="checkbox" data-toggle="vehGod"> Vehicle God</label>
+                <div class="group">
+                    <div class="item"><span>Vehicle Godmode</span><input type="checkbox" data-toggle="vehGod"></div>
                 </div>
-                <div class="row">
-                    <input id="vehModel" placeholder="model (e.g. adder, zentorno, t20)">
-                    <button class="btn primary" id="spawnVehBtn">Spawn</button>
+                <p class="label">Spawn</p>
+                <div class="group">
+                    <div class="item"><span>Model</span><input id="vehModel" placeholder="adder"></div>
                 </div>
-                <div class="row">
-                    <button class="btn" data-action="repairVehicle">Repair</button>
-                    <button class="btn" data-action="upgradeVehicle">Max Upgrade</button>
-                    <button class="btn danger" data-action="boomVehicle">Blow Up</button>
+                <button class="wide primary" id="spawnVehBtn">Spawn Vehicle</button>
+                <div class="group">
+                    <div class="item tappable" data-action="repairVehicle"><span>Repair</span><i class="chev"></i></div>
+                    <div class="item tappable" data-action="upgradeVehicle"><span>Max Upgrade</span><i class="chev"></i></div>
+                    <div class="item tappable destructive" data-action="boomVehicle"><span>Blow Up</span><i class="chev"></i></div>
                 </div>
             </section>
 
             <section class="tab" data-tab="world">
-                <div class="row">
-                    <button class="btn" data-action="setWeather" data-payload='{"type":"CLEAR"}'>Clear</button>
-                    <button class="btn" data-action="setWeather" data-payload='{"type":"RAIN"}'>Rain</button>
-                    <button class="btn" data-action="setWeather" data-payload='{"type":"THUNDER"}'>Thunder</button>
-                    <button class="btn" data-action="setWeather" data-payload='{"type":"SNOW"}'>Snow</button>
-                    <button class="btn" data-action="setWeather" data-payload='{"type":"XMAS"}'>Xmas</button>
+                <p class="label">Weather</p>
+                <div class="group">
+                    <div class="item">
+                        <span>Preset</span>
+                        <div class="seg wrap">
+                            <button data-action="setWeather" data-payload='{"type":"CLEAR"}'>Clear</button>
+                            <button data-action="setWeather" data-payload='{"type":"RAIN"}'>Rain</button>
+                            <button data-action="setWeather" data-payload='{"type":"THUNDER"}'>Storm</button>
+                            <button data-action="setWeather" data-payload='{"type":"SNOW"}'>Snow</button>
+                            <button data-action="setWeather" data-payload='{"type":"FOGGY"}'>Fog</button>
+                        </div>
+                    </div>
                 </div>
-                <div class="row">
-                    <label style="flex:1">Time: <span id="timeVal">12</span>:00
-                        <input type="range" id="timeSlider" min="0" max="23" value="12" style="width:100%">
-                    </label>
+                <p class="label">Time of day</p>
+                <div class="group">
+                    <div class="item column">
+                        <div class="item-head"><span>Hour</span><b id="timeVal">12</b></div>
+                        <input type="range" id="timeSlider" min="0" max="23" value="12">
+                    </div>
                 </div>
-                <div class="row">
-                    <button class="btn danger" data-action="killPeds">Kill Nearby Peds</button>
-                    <button class="btn" data-action="ragdollPeds">Ragdoll Nearby</button>
+                <div class="group">
+                    <div class="item tappable" data-action="ragdollPeds"><span>Ragdoll Nearby Peds</span><i class="chev"></i></div>
+                    <div class="item tappable destructive" data-action="killPeds"><span>Kill Nearby Peds</span><i class="chev"></i></div>
                 </div>
             </section>
 
             <section class="tab" data-tab="players">
-                <div class="row">
-                    <button class="btn primary" id="refreshPlayers">Refresh</button>
-                    <button class="btn" data-action="unspectate">Stop Spectate</button>
-                    <span class="pmeta" id="playerHint">list updates every ~2s via bootstrap</span>
+                <div class="toolbar">
+                    <button class="pill primary" id="refreshPlayers">Refresh</button>
+                    <button class="pill" data-action="unspectate">Stop Spectate</button>
                 </div>
                 <ul id="playerList" class="list"></ul>
             </section>
 
             <section class="tab" data-tab="fun">
-                <div class="row">
-                    <button class="btn" data-action="moonGravity">Moon Gravity</button>
-                    <button class="btn" data-action="normalGravity">Normal Gravity</button>
-                    <button class="btn" data-action="spawnCircle">Circle of Cars</button>
+                <div class="group">
+                    <div class="item tappable" data-action="moonGravity"><span>Moon Gravity</span><i class="chev"></i></div>
+                    <div class="item tappable" data-action="normalGravity"><span>Normal Gravity</span><i class="chev"></i></div>
+                    <div class="item tappable" data-action="spawnCircle"><span>Circle of Cars</span><i class="chev"></i></div>
                 </div>
             </section>
 
             <section class="tab" data-tab="exec">
-                <div class="row">
-                    <select id="execResource" class="input"></select>
-                    <button class="btn" id="loadResources">Refresh</button>
+                <div class="group">
+                    <div class="item"><span>Resource</span><select id="execResource"></select></div>
                 </div>
-                <textarea id="execCode" class="code" spellcheck="false" placeholder="-- lua goes here&#10;print('hi from eni.menu')"></textarea>
-                <div class="row">
-                    <button class="btn primary" id="execRun">Run</button>
-                    <button class="btn" id="execClear">Clear</button>
+                <textarea id="execCode" class="code" spellcheck="false" placeholder="print('hi from eni.menu')"></textarea>
+                <div class="toolbar">
+                    <button class="pill primary" id="execRun">Run</button>
+                    <button class="pill" id="execClear">Clear</button>
+                    <button class="pill" id="loadResources">Reload list</button>
                 </div>
             </section>
 
             <section class="tab" data-tab="settings">
-                <div class="setting">
-                    <label>API URL</label>
-                    <input id="apiUrl" placeholder="http://localhost:8765" class="input" style="flex:1;max-width:260px">
-                    <button class="btn" id="saveApi">Save</button>
+                <p class="label">Connection</p>
+                <div class="group">
+                    <div class="item"><span>API URL</span><input id="apiUrl" placeholder="http://localhost:8765"></div>
+                    <div class="item"><span>Target</span><select id="targetResource"></select></div>
                 </div>
-                <div class="setting">
-                    <label>Target resource</label>
-                    <select id="targetResource" class="input" style="flex:1;max-width:260px"></select>
-                    <button class="btn" id="saveTarget">Set</button>
+                <div class="toolbar">
+                    <button class="pill primary" id="saveApi">Save URL</button>
+                    <button class="pill" id="saveTarget">Set Target</button>
+                    <button class="pill" id="rebootstrap">Re-bootstrap</button>
                 </div>
-                <div class="setting">
-                    <label>Bootstrap player-list writer</label>
-                    <button class="btn" id="rebootstrap">Re-bootstrap</button>
-                </div>
-                <div class="setting">
-                    <label>Build</label>
-                    <span class="value">eni.menu v2 · web-hosted UI</span>
+                <p class="label">About</p>
+                <div class="group">
+                    <div class="item"><span>Version</span><b class="muted">eni.menu 3.0</b></div>
                 </div>
             </section>
+
+            </div>
         </main>
     </div>
     <div id="notif" class="notif"></div>
+    <div id="cursor"></div>
 </div>
 <script src="script.js"></script>
 </body>

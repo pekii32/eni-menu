@@ -80,8 +80,8 @@ async function refreshPlayers() {
     const list = document.getElementById('playerList');
     list.innerHTML = '<li>loading...</li>';
     const players = await post('getPlayers');
-    if (!Array.isArray(players)) { list.innerHTML = '<li>no data — check API</li>'; return; }
-    if (players.length === 0) { list.innerHTML = '<li>no players yet (bootstrap needs ~2s after inject)</li>'; return; }
+    if (!Array.isArray(players)) { list.innerHTML = '<li class="pmeta">no data</li>'; return; }
+    if (players.length === 0) { list.innerHTML = '<li class="pmeta">no players nearby</li>'; return; }
     list.innerHTML = '';
     players.forEach(p => {
         const li = document.createElement('li');
@@ -174,16 +174,34 @@ async function checkConn() {
 
 // NUI visibility bridge (Red Engine executor path)
 if (MODE === 'nui') {
+    document.body.classList.add('nui');
     document.getElementById('app').classList.add('hidden');
+
+    // Executor + Settings drive the HTTP API only — no lua handlers back them.
+    document.querySelectorAll('.tab-btn[data-tab="exec"], .tab-btn[data-tab="settings"]')
+        .forEach(b => b.classList.add('hidden'));
+
     window.addEventListener('message', (e) => {
         const d = e.data || {};
         if (d.action === 'setVisible') {
             document.getElementById('app').classList.toggle('hidden', !d.visible);
+            if (d.visible && d.state) {
+                document.querySelectorAll('[data-toggle]').forEach(cb => {
+                    if (d.state[cb.dataset.toggle] !== undefined) cb.checked = d.state[cb.dataset.toggle];
+                });
+            }
         }
         if (d.action === 'notify' && d.text) notify(d.text);
     });
     document.addEventListener('keyup', (e) => {
         if (e.key === 'Escape') post('close');
+    });
+
+    // Paint our own pointer from the mouse position lua forwards into the DUI.
+    const cursor = document.getElementById('cursor');
+    document.addEventListener('mousemove', (e) => {
+        cursor.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+        cursor.classList.add('on');
     });
 }
 
