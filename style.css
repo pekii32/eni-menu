@@ -42,11 +42,14 @@ html, body, * { cursor: none !important; }
     display: grid;
     grid-template-columns: 208px 1fr;
     width: 880px; height: 580px;
+    flex-shrink: 0;                   /* never let a small viewport resize the hit grid */
     background: var(--panel);
-    border: 0.5px solid rgba(255, 255, 255, 0.13);
     border-radius: 20px;
     overflow: hidden;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+    /* hairline drawn as an inset ring — a real border would shift every row by 0.5px
+       and desync lua's hit-testing */
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6),
+                inset 0 0 0 0.5px rgba(255, 255, 255, 0.13);
 }
 
 /* ── sidebar ─────────────────────────────────────────── */
