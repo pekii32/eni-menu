@@ -311,14 +311,19 @@ local function aimTarget()
 end
 
 -- ── player / troll actions ───────────────────────────────────────────────
-local function withSubject(fn, needControl)
+-- A player's ped is permanently owned by their own client, so
+-- NetworkRequestControlOfEntity never succeeds on it. Everything below
+-- therefore acts through entities WE own — explosions, props, peds, bullets —
+-- which replicate without needing any control over them.
+local function withSubject(fn)
     local pd = pedByServerId(subject)
     if not pd then notify('Player not found') return end
-    if needControl and not takeControl(pd) then
-        notify('Could not take control of that player')
-        return
-    end
     fn(pd)
+end
+
+-- Invisible zero-damage blast: pure physics knockback, no injury.
+local function shove(x, y, z, power)
+    AddExplosion(x, y, z, 0, power or 0.0, false, true, 0.0)
 end
 
 function A.tpToPlayer()
@@ -327,14 +332,6 @@ function A.tpToPlayer()
         SetEntityCoordsNoOffset(curVehicle() or me(), c.x + 1.5, c.y + 1.5, c.z, false, false, false)
         notify('Teleported to player')
     end)
-end
-
-function A.bringPlayer()
-    withSubject(function(pd)
-        local c = myCoords()
-        SetEntityCoordsNoOffset(pd, c.x + 1.5, c.y + 1.5, c.z, false, false, false)
-        notify('Player brought')
-    end, true)
 end
 
 function A.spectate()
@@ -354,33 +351,35 @@ end
 function A.explodePlayer()
     withSubject(function(pd)
         local c = GetEntityCoords(pd)
-        AddExplosion(c.x, c.y, c.z, 2, 100.0, true, false, 1.0)
+        AddOwnedExplosion(me(), c.x, c.y, c.z, 2, 1.0, true, false, 1.0)
         notify('Exploded')
+    end)
+end
+
+function A.carpetBomb()
+    withSubject(function(pd)
+        CreateThread(function()
+            for i = 1, 8 do
+                if not ENI.alive then return end
+                if not DoesEntityExist(pd) then return end
+                local c = GetEntityCoords(pd)
+                AddOwnedExplosion(me(), c.x + math.random(-5, 5), c.y + math.random(-5, 5), c.z, 4, 1.0, true, false, 1.0)
+                Wait(320)
+            end
+        end)
+        notify('Carpet bombing')
     end)
 end
 
 function A.firePlayer()
     withSubject(function(pd)
         local c = GetEntityCoords(pd)
-        StartScriptFire(c.x, c.y, c.z, 25, true)
-        StartEntityFire(pd)
+        for i = 0, 5 do
+            local a = (i / 6) * math.pi * 2
+            StartScriptFire(c.x + math.cos(a) * 1.6, c.y + math.sin(a) * 1.6, c.z, 25, true)
+        end
         notify('Set on fire')
-    end, true)
-end
-
-function A.ragdollPlayer()
-    withSubject(function(pd)
-        SetPedToRagdoll(pd, 8000, 8000, 0, true, true, false)
-        notify('Ragdolled')
-    end, true)
-end
-
-function A.launchPlayer()
-    withSubject(function(pd)
-        SetPedToRagdoll(pd, 6000, 6000, 0, true, true, false)
-        ApplyForceToEntity(pd, 1, 0.0, 0.0, 55.0, 0.0, 0.0, 0.0, 0, false, true, true, false, true)
-        notify('Launched')
-    end, true)
+    end)
 end
 
 function A.slapPlayer()
@@ -388,28 +387,114 @@ function A.slapPlayer()
         local mc, c = myCoords(), GetEntityCoords(pd)
         local dx, dy = c.x - mc.x, c.y - mc.y
         local len = math.max(math.sqrt(dx * dx + dy * dy), 0.001)
-        SetPedToRagdoll(pd, 3000, 3000, 0, true, true, false)
-        ApplyForceToEntity(pd, 1, (dx / len) * 22.0, (dy / len) * 22.0, 12.0, 0.0, 0.0, 0.0, 0, false, true, true, false, true)
+        -- blast just behind them so the shockwave throws them away from me
+        shove(c.x - (dx / len) * 1.2, c.y - (dy / len) * 1.2, c.z - 0.6, 0.0)
         notify('Slapped')
-    end, true)
+    end)
 end
 
-function A.freezePlayer()
-    withSubject(function(pd) FreezeEntityPosition(pd, true); notify('Frozen') end, true)
-end
-
-function A.unfreezePlayer()
-    withSubject(function(pd) FreezeEntityPosition(pd, false); notify('Unfrozen') end, true)
-end
-
-function A.kickFromVehicle()
+function A.launchPlayer()
     withSubject(function(pd)
-        local v = GetVehiclePedIsIn(pd, false)
-        if v == 0 then notify('Not in a vehicle') return end
-        takeControl(v)
-        TaskLeaveVehicle(pd, v, 4160)
-        notify('Ejected from vehicle')
-    end, true)
+        local c = GetEntityCoords(pd)
+        shove(c.x, c.y, c.z - 1.2, 0.0)
+        notify('Launched')
+    end)
+end
+
+function A.ragdollPlayer()
+    withSubject(function(pd)
+        CreateThread(function()
+            for i = 1, 5 do
+                if not ENI.alive or not DoesEntityExist(pd) then return end
+                local c = GetEntityCoords(pd)
+                shove(c.x, c.y, c.z - 1.0, 0.0)
+                Wait(500)
+            end
+        end)
+        notify('Ragdolling')
+    end)
+end
+
+function A.cagePlayer()
+    withSubject(function(pd)
+        local c = GetEntityCoords(pd)
+        local m = loadModel('prop_fnclink_03e')
+        if not m then notify('Cage prop failed to load') return end
+        for i = 0, 3 do
+            local a = (i / 4) * math.pi * 2
+            local obj = CreateObject(m, c.x + math.cos(a) * 1.8, c.y + math.sin(a) * 1.8, c.z - 1.0, true, true, false)
+            SetEntityHeading(obj, math.deg(a) + 90.0)
+            FreezeEntityPosition(obj, true)
+            SetEntityAsMissionEntity(obj, true, true)
+        end
+        SetModelAsNoLongerNeeded(m)
+        notify('Caged')
+    end)
+end
+
+function A.sendAttackers()
+    withSubject(function(pd)
+        local c = GetEntityCoords(pd)
+        local m = loadModel('g_m_m_chigoon_01')
+        if not m then notify('Ped model failed to load') return end
+        for i = 1, 3 do
+            local a = (i / 3) * math.pi * 2
+            local np = CreatePed(4, m, c.x + math.cos(a) * 6.0, c.y + math.sin(a) * 6.0, c.z, 0.0, true, false)
+            GiveWeaponToPed(np, GetHashKey('WEAPON_MICROSMG'), 999, false, true)
+            SetPedAccuracy(np, 65)
+            SetPedCombatAttributes(np, 46, true)      -- always fight
+            SetPedFleeAttributes(np, 0, false)
+            SetEntityAsMissionEntity(np, true, true)
+            TaskCombatPed(np, pd, 0, 16)
+        end
+        SetModelAsNoLongerNeeded(m)
+        notify('Attackers sent')
+    end)
+end
+
+function A.ramCar()
+    withSubject(function(pd)
+        local c = GetEntityCoords(pd)
+        local mc = myCoords()
+        local dx, dy = c.x - mc.x, c.y - mc.y
+        local len = math.max(math.sqrt(dx * dx + dy * dy), 0.001)
+        local sx, sy = c.x - (dx / len) * 22.0, c.y - (dy / len) * 22.0
+        local m = loadModel('phantom')
+        if not m then notify('Truck failed to load') return end
+        local hd = math.deg(math.atan(dy / len, dx / len)) - 90.0
+        local v = CreateVehicle(m, sx, sy, c.z + 0.5, hd, true, false)
+        SetEntityAsMissionEntity(v, true, true)
+        SetVehicleEngineOn(v, true, true, false)
+        SetVehicleForwardSpeed(v, 55.0)
+        SetModelAsNoLongerNeeded(m)
+        notify('Incoming truck')
+    end)
+end
+
+function A.snipePlayer()
+    withSubject(function(pd)
+        local p = me()
+        local muzzle = GetPedBoneCoords(p, 28422, 0.0, 0.0, 0.0)
+        local hit = GetPedBoneCoords(pd, 31086, 0.0, 0.0, 0.0)
+        ShootSingleBulletBetweenCoords(
+            muzzle.x, muzzle.y, muzzle.z + 0.4, hit.x, hit.y, hit.z,
+            250, true, GetHashKey('WEAPON_HEAVYSNIPER'), p, true, false, 2500.0)
+        notify('Shot fired')
+    end)
+end
+
+function A.attachProp()
+    withSubject(function(pd)
+        local m = loadModel('prop_beach_fire')
+        if not m then notify('Prop failed to load') return end
+        local c = GetEntityCoords(pd)
+        local obj = CreateObject(m, c.x, c.y, c.z, true, true, false)
+        SetEntityAsMissionEntity(obj, true, true)
+        AttachEntityToEntity(obj, pd, GetPedBoneIndex(pd, 24818),
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false, false, false, false, 2, true)
+        SetModelAsNoLongerNeeded(m)
+        notify('Prop attached')
+    end)
 end
 
 function A.boomVehicle()
@@ -429,6 +514,16 @@ function A.delVehicle()
         if not takeControl(v) then notify('Could not take control') return end
         SetEntityAsMissionEntity(v, true, true); DeleteVehicle(v)
         notify('Vehicle deleted')
+    end)
+end
+
+function A.launchVehicle()
+    withSubject(function(pd)
+        local v = GetVehiclePedIsIn(pd, false)
+        if v == 0 then notify('Not in a vehicle') return end
+        local c = GetEntityCoords(v)
+        shove(c.x, c.y, c.z - 1.5, 0.0)   -- blast under the chassis
+        notify('Vehicle launched')
     end)
 end
 
@@ -472,21 +567,24 @@ local function buildRows()
         act('Back to Player List', function() subject = nil; page = 1 end)
         sec('Movement')
         act('Teleport to Player', A.tpToPlayer)
-        act('Bring Player', A.bringPlayer)
         act('Spectate', A.spectate)
         act('Stop Spectating', A.stopSpectate)
         act('Set Waypoint on Player', A.markPlayer)
         sec('Troll')
-        act('Slap', A.slapPlayer)
-        act('Ragdoll', A.ragdollPlayer)
-        act('Launch Into Air', A.launchPlayer)
+        act('Slap', A.slapPlayer, false, 'Shockwave, no damage')
+        act('Launch Into Air', A.launchPlayer, false, 'Blast from underneath')
+        act('Ragdoll Loop', A.ragdollPlayer, false, 'Five shoves, half a second apart')
+        act('Cage', A.cagePlayer, false, 'Fence panels boxed around them')
+        act('Attach Fire Prop', A.attachProp)
         act('Set On Fire', A.firePlayer)
-        act('Freeze', A.freezePlayer)
-        act('Unfreeze', A.unfreezePlayer)
+        act('Send Attackers', A.sendAttackers, false, 'Three armed peds hunt them')
+        act('Ram With Truck', A.ramCar, false, 'Phantom launched at them')
         act('Rain Cars', A.rainCars)
+        act('Snipe', A.snipePlayer, true, 'Single heavy sniper round')
+        act('Carpet Bomb', A.carpetBomb, true, 'Eight rockets over ~3s')
         act('Explode', A.explodePlayer, true)
         sec('Their Vehicle')
-        act('Eject From Vehicle', A.kickFromVehicle)
+        act('Launch Vehicle', A.launchVehicle)
         act('Explode Vehicle', A.boomVehicle, true)
         act('Delete Vehicle', A.delVehicle, true)
         return r
