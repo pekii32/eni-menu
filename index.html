@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" class="hidden">
+    <div class="panel">
+        <aside class="sidebar">
+            <div class="brand">
+                <span class="dot"></span>
+                <div><b>eni</b><span class="accent">.menu</span></div>
+            </div>
+            <nav>
+                <button class="tab-btn active" data-tab="self">Self</button>
+                <button class="tab-btn" data-tab="teleport">Teleport</button>
+                <button class="tab-btn" data-tab="vehicle">Vehicle</button>
+                <button class="tab-btn" data-tab="world">World</button>
+                <button class="tab-btn" data-tab="players">Players</button>
+                <button class="tab-btn" data-tab="fun">Fun</button>
+            </nav>
+            <button id="closeBtn" class="close">Close [ESC]</button>
+        </aside>
+
+        <main>
+            <header>
+                <h1 id="tabTitle">Self</h1>
+                <span class="hint">F5 to toggle</span>
+            </header>
+
+            <section class="tab active" data-tab="self">
+                <div class="row toggles">
+                    <label><input type="checkbox" data-toggle="god"> Godmode</label>
+                    <label><input type="checkbox" data-toggle="invisible"> Invisible</label>
+                    <label><input type="checkbox" data-toggle="noclip"> Noclip</label>
+                    <label><input type="checkbox" data-toggle="superJump"> Super Jump</label>
+                    <label><input type="checkbox" data-toggle="superRun"> Super Run</label>
+                    <label><input type="checkbox" data-toggle="infAmmo"> Inf Ammo</label>
+                </div>
+                <div class="row">
+                    <button class="btn" data-action="heal">Heal + Armor</button>
+                    <button class="btn" data-action="giveWeapons">Give Weapons</button>
+                    <button class="btn danger" data-action="suicide">Suicide</button>
+                </div>
+                <div class="row">
+                    <button class="btn" data-action="wanted" data-payload='{"level":0}'>Wanted 0</button>
+                    <button class="btn" data-action="wanted" data-payload='{"level":5}'>Wanted 5</button>
+                </div>
+            </section>
+
+            <section class="tab" data-tab="teleport">
+                <div class="row">
+                    <button class="btn primary" data-action="tpWaypoint">To Waypoint</button>
+                </div>
+                <div class="row coords">
+                    <input id="tpx" placeholder="x" type="number">
+                    <input id="tpy" placeholder="y" type="number">
+                    <input id="tpz" placeholder="z" type="number">
+                    <button class="btn" id="tpCoordsBtn">Go</button>
+                </div>
+            </section>
+
+            <section class="tab" data-tab="vehicle">
+                <div class="row toggles">
+                    <label><input type="checkbox" data-toggle="vehGod"> Vehicle God</label>
+                </div>
+                <div class="row">
+                    <input id="vehModel" placeholder="model (e.g. adder)">
+                    <button class="btn primary" id="spawnVehBtn">Spawn</button>
+                </div>
+                <div class="row">
+                    <button class="btn" data-action="repairVehicle">Repair</button>
+                    <button class="btn" data-action="upgradeVehicle">Max Upgrade</button>
+                    <button class="btn danger" data-action="boomVehicle">Blow Up</button>
+                </div>
+            </section>
+
+            <section class="tab" data-tab="world">
+                <div class="row">
+                    <button class="btn" data-action="setWeather" data-payload='{"type":"CLEAR"}'>Clear</button>
+                    <button class="btn" data-action="setWeather" data-payload='{"type":"RAIN"}'>Rain</button>
+                    <button class="btn" data-action="setWeather" data-payload='{"type":"THUNDER"}'>Thunder</button>
+                    <button class="btn" data-action="setWeather" data-payload='{"type":"SNOW"}'>Snow</button>
+                    <button class="btn" data-action="setWeather" data-payload='{"type":"XMAS"}'>Xmas</button>
+                </div>
+                <div class="row">
+                    <label style="flex:1">Time: <span id="timeVal">12</span>:00
+                        <input type="range" id="timeSlider" min="0" max="23" value="12" style="width:100%">
+                    </label>
+                </div>
+                <div class="row">
+                    <button class="btn danger" data-action="killPeds">Kill Nearby Peds</button>
+                    <button class="btn" data-action="ragdollPeds">Ragdoll Nearby</button>
+                </div>
+            </section>
+
+            <section class="tab" data-tab="players">
+                <div class="row">
+                    <button class="btn primary" id="refreshPlayers">Refresh</button>
+                    <button class="btn" data-action="unspectate">Stop Spectate</button>
+                </div>
+                <ul id="playerList" class="list"></ul>
+            </section>
+
+            <section class="tab" data-tab="fun">
+                <div class="row">
+                    <button class="btn" data-action="moonGravity">Moon Gravity</button>
+                    <button class="btn" data-action="normalGravity">Normal Gravity</button>
+                    <button class="btn" data-action="spawnCircle">Circle of Cars</button>
+                </div>
+            </section>
+        </main>
+    </div>
+    <div id="notif" class="notif"></div>
+</div>
+<script src="script.js"></script>
+</body>
+</html>
