@@ -35,11 +35,24 @@ local notifyTxt, notifyUntil = nil, 0
 local S = {
     god = false, invis = false, noclip = false, freecam = false,
     superJump = false, fastRun = false, infStam = false,
-    infAmmo = false, noReload = false, silentAim = false, aimHead = true,
-    rapidFire = false, vehGod = false, vehBoost = false,
+    infAmmo = false, noReload = false, rapidFire = false,
+    aimbot = false, aimVisible = true, triggerbot = false, silentAim = false,
+    vehGod = false, vehBoost = false,
     espNames = false, espBox = false, espHealth = false,
+    espSkeleton = false, espTracer = false, espSnapline = false, radar = false,
     blockInput = true,
 }
+
+-- cycled value settings (index into these arrays)
+local AIM_BONES = {
+    { 'Head',  31086 },
+    { 'Neck',  39317 },
+    { 'Chest', 24818 },
+}
+local AIM_FOV    = { 3.0, 5.0, 8.0, 12.0, 20.0, 90.0 }   -- degrees of cone
+local AIM_SMOOTH = { { 'Instant', 1.0 }, { 'Fast', 0.55 }, { 'Smooth', 0.3 }, { 'Legit', 0.15 } }
+local DMG_MULT   = { { 'Off', 0 }, { 'x2', 2.0 }, { 'x5', 5.0 }, { 'One-Shot', 100.0 } }
+local aimBoneIdx, aimFovIdx, aimSmoothIdx, dmgIdx = 1, 3, 2, 1
 
 local VEHICLES = {
     'adder','zentorno','t20','osiris','entityxf','banshee','infernus','cheetah',
@@ -286,28 +299,60 @@ function A.tpToFreecam()
     notify('Teleported to freecam')
 end
 
--- ── silent aim ───────────────────────────────────────────────────────────
--- Picks the player nearest your crosshair and redirects the bullet there.
-local function aimTarget()
+-- ── aim core ─────────────────────────────────────────────────────────────
+local function boneCoords(pd)
+    return GetPedBoneCoords(pd, AIM_BONES[aimBoneIdx][2], 0.0, 0.0, 0.0)
+end
+
+-- Nearest player to crosshair within the FOV cone. Screen-space score so the
+-- cone is symmetric regardless of aspect ratio.
+local function aimTarget(requireVisible)
     local mc = myCoords()
-    local best, bestScore = nil, 0.14   -- max normalised screen distance
+    local fov = AIM_FOV[aimFovIdx] / 90.0   -- rough normalised cone radius
+    local best, bestScore = nil, fov
     for _, id in ipairs(GetActivePlayers()) do
         if id ~= PlayerId() then
             local pd = GetPlayerPed(id)
             if DoesEntityExist(pd) and not IsEntityDead(pd) then
-                local c = GetEntityCoords(pd)
+                local c = boneCoords(pd)
                 local d = #(c - mc)
-                if d < 300.0 and HasEntityClearLosToEntity(me(), pd, 17) then
-                    local on, sx, sy = GetScreenCoordFromWorldCoord(c.x, c.y, c.z)
-                    if on then
-                        local score = math.sqrt((sx - 0.5) ^ 2 + (sy - 0.5) ^ 2)
-                        if score < bestScore then best, bestScore = pd, score end
+                if d < 400.0 then
+                    local vis = (not requireVisible) or HasEntityClearLosToEntity(me(), pd, 17)
+                    if vis then
+                        local on, sx, sy = GetScreenCoordFromWorldCoord(c.x, c.y, c.z)
+                        if on then
+                            local score = math.sqrt((sx - 0.5) ^ 2 + (sy - 0.5) ^ 2)
+                            if score < bestScore then best, bestScore = pd, score end
+                        end
                     end
                 end
             end
         end
     end
     return best
+end
+
+local function normAngle(a)
+    while a > 180.0 do a = a - 360.0 end
+    while a < -180.0 do a = a + 360.0 end
+    return a
+end
+
+-- Steer the gameplay camera toward a world point, lerped by the smooth setting.
+local function steerAt(c)
+    local cam = GetGameplayCamCoord()
+    local dx, dy, dz = c.x - cam.x, c.y - cam.y, c.z - cam.z
+    local flat = math.sqrt(dx * dx + dy * dy)
+    local wantHeading = math.deg(math.atan(-dx, dy))
+    local wantPitch   = math.deg(math.atan(dz, flat))
+
+    local relWant = normAngle(wantHeading - GetEntityHeading(me()))
+    local relCur  = GetGameplayCamRelativeHeading()
+    local curP    = GetGameplayCamRelativePitch()
+    local t = AIM_SMOOTH[aimSmoothIdx][2]
+
+    SetGameplayCamRelativeHeading(relCur + normAngle(relWant - relCur) * t)
+    SetGameplayCamRelativePitch(curP + (wantPitch - curP) * t, 1.0)
 end
 
 -- ── player / troll actions ───────────────────────────────────────────────
@@ -549,7 +594,7 @@ end
 function A.unload() notify('Unloading'); ENI.destroy() end
 
 -- ── menu definition ──────────────────────────────────────────────────────
-local TABS = { 'Self', 'Weapons', 'Vehicle', 'Teleport', 'Players', 'World', 'Visuals', 'Settings' }
+local TABS = { 'Self', 'Aimbot', 'Weapons', 'Vehicle', 'Teleport', 'Players', 'World', 'Visuals', 'Settings' }
 
 local function buildRows()
     local t = TABS[tabIndex]
@@ -606,12 +651,22 @@ local function buildRows()
         act('Revive', A.revive)
         act('Suicide', A.suicide, true)
 
+    elseif t == 'Aimbot' then
+        sec('Aim Assist')
+        tog('aimbot', 'Aimbot', 'Hold aim — locks camera to nearest target')
+        tog('triggerbot', 'Triggerbot', 'Auto-fire when a target enters the cone')
+        tog('silentAim', 'Silent Aim', 'Bullet redirects to target on your shot')
+        tog('aimVisible', 'Visible Check', 'Ignore targets behind cover')
+        sec('Tuning')
+        val('Target Bone', AIM_BONES[aimBoneIdx][1], function() aimBoneIdx = aimBoneIdx % #AIM_BONES + 1 end)
+        val('FOV Cone', ('%d°'):format(AIM_FOV[aimFovIdx]), function() aimFovIdx = aimFovIdx % #AIM_FOV + 1 end)
+        val('Smoothing', AIM_SMOOTH[aimSmoothIdx][1], function() aimSmoothIdx = aimSmoothIdx % #AIM_SMOOTH + 1 end)
+
     elseif t == 'Weapons' then
         sec('Loadout')
         act('Give All Weapons', A.giveWeapons)
-        sec('Aim')
-        tog('silentAim', 'Silent Aim', 'Redirects your shot to the nearest player')
-        tog('aimHead', 'Target Head', 'Otherwise aims centre mass')
+        sec('Damage')
+        val('Damage Multiplier', DMG_MULT[dmgIdx][1], function() dmgIdx = dmgIdx % #DMG_MULT + 1 end)
         sec('Modifiers')
         tog('infAmmo', 'Infinite Ammo')
         tog('noReload', 'No Reload')
@@ -667,6 +722,11 @@ local function buildRows()
         tog('espNames', 'Names & Distance')
         tog('espBox', 'Boxes')
         tog('espHealth', 'Health Bars')
+        tog('espSkeleton', 'Skeleton')
+        tog('espTracer', 'Tracers')
+        tog('espSnapline', 'Snaplines')
+        sec('Radar')
+        tog('radar', 'Player Blips', 'Live blips on the minimap')
 
     elseif t == 'Settings' then
         sec('Input')
@@ -874,23 +934,43 @@ CreateThread(function()
     end
 end)
 
--- silent aim
+-- aimbot / triggerbot / silent aim
 CreateThread(function()
+    local fired = 0
     while ENI.alive do
         Wait(0)
-        if S.silentAim and not open and IsPlayerFreeAiming(PlayerId()) then
-            if IsDisabledControlJustPressed(0, 24) or IsControlJustPressed(0, 24) then
-                local target = aimTarget()
+        local aiming = (not open) and IsPlayerFreeAiming(PlayerId())
+
+        -- Aimbot: hold aim, camera locks to the best target's bone.
+        if S.aimbot and aiming then
+            local target = aimTarget(S.aimVisible)
+            if target then steerAt(boneCoords(target)) end
+        end
+
+        if aiming then
+            local shoot = IsDisabledControlJustPressed(0, 24) or IsControlJustPressed(0, 24)
+
+            -- Triggerbot: auto-fire the instant a valid target enters the cone.
+            if S.triggerbot and not shoot then
+                local target = aimTarget(S.aimVisible)
+                if target and (GetGameTimer() - fired) > 120 then
+                    shoot = true
+                    fired = GetGameTimer()
+                end
+            end
+
+            -- Silent aim (or triggerbot's shot): spawn an owned bullet straight
+            -- to the target bone so it lands regardless of where the barrel points.
+            if shoot and (S.silentAim or S.triggerbot) then
+                local target = aimTarget(S.aimVisible)
                 if target then
                     local p = me()
-                    local w = GetSelectedPedWeapon(p)
                     local muzzle = GetPedBoneCoords(p, 28422, 0.0, 0.0, 0.0)
-                    local hit = S.aimHead and GetPedBoneCoords(target, 31086, 0.0, 0.0, 0.0)
-                                or GetPedBoneCoords(target, 24818, 0.0, 0.0, 0.0)
+                    local hit = boneCoords(target)
                     ShootSingleBulletBetweenCoords(
                         muzzle.x, muzzle.y, muzzle.z,
                         hit.x, hit.y, hit.z,
-                        150, true, w, p, true, false, 2000.0)
+                        200, true, GetSelectedPedWeapon(p), p, true, false, 2500.0)
                 end
             end
         end
@@ -952,46 +1032,76 @@ CreateThread(function()
     end
 end)
 
--- ESP
+-- ESP — bone pairs for the skeleton, drawn as world-space lines.
+local SKELETON = {
+    { 31086, 39317 },   -- head → neck
+    { 39317, 24818 },   -- neck → chest
+    { 24818, 11816 },   -- chest → pelvis
+    { 39317, 10706 }, { 10706, 40269 }, { 40269, 28252 }, { 28252, 57005 },  -- right arm
+    { 39317, 64729 }, { 64729, 45509 }, { 45509, 61163 }, { 61163, 18905 },  -- left arm
+    { 11816, 51826 }, { 51826, 36864 }, { 36864, 52301 },  -- right leg
+    { 11816, 58271 }, { 58271, 16335 }, { 16335, 14201 },  -- left leg
+}
+
 CreateThread(function()
     while ENI.alive do
         Wait(0)
-        if S.espNames or S.espBox or S.espHealth then
+        local anyEsp = S.espNames or S.espBox or S.espHealth or S.espSkeleton or S.espTracer or S.espSnapline
+        if anyEsp then
             local mc = myCoords()
+            local cam = GetGameplayCamCoord()
             for _, id in ipairs(GetActivePlayers()) do
                 if id ~= PlayerId() then
                     local pd = GetPlayerPed(id)
                     if DoesEntityExist(pd) then
                         local c = GetEntityCoords(pd)
                         local d = #(c - mc)
-                        if d < 300.0 then
+                        if d < 400.0 then
+                            local hb = GetPedBoneCoords(pd, 31086, 0.0, 0.0, 0.0)
                             local onH, hx, hy = GetScreenCoordFromWorldCoord(c.x, c.y, c.z + 1.0)
                             local onF, fx, fy = GetScreenCoordFromWorldCoord(c.x, c.y, c.z - 1.0)
+
+                            if S.espSkeleton then
+                                for _, pair in ipairs(SKELETON) do
+                                    local a = GetPedBoneCoords(pd, pair[1], 0.0, 0.0, 0.0)
+                                    local b = GetPedBoneCoords(pd, pair[2], 0.0, 0.0, 0.0)
+                                    DrawLine(a.x, a.y, a.z, b.x, b.y, b.z, 255, 255, 255, 160)
+                                end
+                            end
+
+                            if S.espTracer and onH then
+                                -- world line from just under the camera to the head
+                                DrawLine(cam.x, cam.y, cam.z - 0.6, hb.x, hb.y, hb.z, 120, 220, 255, 130)
+                            end
+
                             if onH then
+                                if S.espSnapline and onF then
+                                    DrawRect(hx, (0.98 + hy) / 2, 0.0016, math.abs(0.98 - hy), 120, 220, 255, 120)
+                                end
                                 if S.espBox and onF then
                                     local h = math.abs(fy - hy)
                                     local w = h * 0.42
-                                    local t = 0.0014
-                                    DrawRect(hx, hy, w, t, 255, 255, 255, 190)
-                                    DrawRect(hx, fy, w, t, 255, 255, 255, 190)
-                                    DrawRect(hx - w/2, (hy+fy)/2, t*0.56, h, 255, 255, 255, 190)
-                                    DrawRect(hx + w/2, (hy+fy)/2, t*0.56, h, 255, 255, 255, 190)
+                                    local t = 0.0013
+                                    DrawRect(hx, hy, w, t, 255, 255, 255, 200)
+                                    DrawRect(hx, fy, w, t, 255, 255, 255, 200)
+                                    DrawRect(hx - w/2, (hy+fy)/2, t*0.56, h, 255, 255, 255, 200)
+                                    DrawRect(hx + w/2, (hy+fy)/2, t*0.56, h, 255, 255, 255, 200)
                                 end
                                 if S.espHealth and onF then
                                     local hp = math.max(0, math.min(1, (GetEntityHealth(pd) - 100) / 100))
                                     local h = math.abs(fy - hy)
                                     local w = h * 0.42
                                     local bx = hx - w/2 - 0.006
-                                    DrawRect(bx, (hy+fy)/2, 0.0022, h, 0, 0, 0, 160)
-                                    DrawRect(bx, fy - (h*hp)/2, 0.0022, h*hp,
-                                        math.floor(255*(1-hp)), math.floor(200*hp), 60, 230)
+                                    DrawRect(bx, (hy+fy)/2, 0.0024, h, 0, 0, 0, 170)
+                                    DrawRect(bx, fy - (h*hp)/2, 0.0024, h*hp,
+                                        math.floor(255*(1-hp)), math.floor(200*hp), 60, 235)
                                 end
                                 if S.espNames then
                                     SetTextScale(0.30, 0.30); SetTextFont(4); SetTextCentre(true)
-                                    SetTextColour(255, 255, 255, 220); SetTextOutline()
+                                    SetTextColour(255, 255, 255, 225); SetTextOutline()
                                     SetTextEntry('STRING')
-                                    AddTextComponentString(('%s [%d]  %dm'):format(GetPlayerName(id) or '?', GetPlayerServerId(id), math.floor(d)))
-                                    DrawText(hx, hy - 0.028)
+                                    AddTextComponentString(('%s  %dm'):format(GetPlayerName(id) or '?', math.floor(d)))
+                                    DrawText(hx, hy - 0.030)
                                 end
                             end
                         end
@@ -1002,12 +1112,74 @@ CreateThread(function()
     end
 end)
 
+-- radar blips (managed set — created on demand, cleaned up on toggle/unload)
+local blips = {}
+local function clearBlips()
+    for _, b in pairs(blips) do if DoesBlipExist(b) then RemoveBlip(b) end end
+    blips = {}
+end
+CreateThread(function()
+    while ENI.alive do
+        Wait(300)
+        if S.radar then
+            local seen = {}
+            for _, id in ipairs(GetActivePlayers()) do
+                if id ~= PlayerId() then
+                    local pd = GetPlayerPed(id)
+                    if DoesEntityExist(pd) then
+                        local sid = GetPlayerServerId(id)
+                        seen[sid] = true
+                        if not blips[sid] or not DoesBlipExist(blips[sid]) then
+                            local b = AddBlipForEntity(pd)
+                            SetBlipSprite(b, 1)
+                            SetBlipColour(b, 1)
+                            SetBlipScale(b, 0.85)
+                            SetBlipCategory(b, 7)
+                            BeginTextCommandSetBlipName('STRING')
+                            AddTextComponentString(GetPlayerName(id) or '?')
+                            EndTextCommandSetBlipName(b)
+                            blips[sid] = b
+                        end
+                        SetBlipColour(blips[sid], GetPlayerPed(id) and IsPedInAnyVehicle(pd, false) and 3 or 1)
+                    end
+                end
+            end
+            for sid, b in pairs(blips) do
+                if not seen[sid] then
+                    if DoesBlipExist(b) then RemoveBlip(b) end
+                    blips[sid] = nil
+                end
+            end
+        elseif next(blips) then
+            clearBlips()
+        end
+    end
+end)
+
+-- weapon damage multiplier
+CreateThread(function()
+    local applied = 0
+    while ENI.alive do
+        Wait(300)
+        local mult = DMG_MULT[dmgIdx][2]
+        if mult > 0 then
+            SetPlayerWeaponDamageModifier(PlayerId(), mult)
+            applied = mult
+        elseif applied ~= 0 then
+            SetPlayerWeaponDamageModifier(PlayerId(), 1.0)
+            applied = 0
+        end
+    end
+end)
+
 -- ── teardown ─────────────────────────────────────────────────────────────
 ENI.destroy = function()
     ENI.alive = false
     pcall(function()
         if cam then RenderScriptCams(false, false, 0, true, true); DestroyCam(cam, false) end
         ClearFocus()
+        clearBlips()
+        SetPlayerWeaponDamageModifier(PlayerId(), 1.0)
         local p = PlayerPedId()
         SetEntityCollision(p, true, true); FreezeEntityPosition(p, false)
         SetEntityVisible(p, true, false); SetEntityInvincible(p, false)
